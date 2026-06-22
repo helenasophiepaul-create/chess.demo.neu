@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schach & Expertise – Check vs. Threat Demo</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #F4F6F9;
+  color: #1B2A4A;
+  min-height: 100vh;
+}
+header {
+  background: #1B2A4A;
+  color: white;
+  padding: 1.1rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+header h1 { font-size: 1.2rem; font-weight: 700; }
+header p  { font-size: 0.82rem; color: #D8E0EA; margin-top: 2px; }
+
+.main { max-width: 560px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+
+/* PROGRESS */
+.progress-bar {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 1.5rem;
+}
+.prog-track {
+  flex: 1; height: 6px; background: #D8E0EA; border-radius: 3px; overflow: hidden;
+}
+.prog-fill {
+  height: 100%; background: #2E5F8A; border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.prog-label { font-size: 0.8rem; color: #4A5568; white-space: nowrap; }
+
+/* TASK HEADER */
+.task-header {
+  background: #1B2A4A;
+  color: white;
+  border-radius: 12px 12px 0 0;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.task-header .badge {
+  background: #C9A84C;
+  color: #1B2A4A;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.task-header .task-q {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* CARD */
+.card {
+  background: white;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* BOARD */
+.board-area { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.board {
+  display: grid;
+  grid-template-columns: repeat(4, 78px);
+  grid-template-rows: repeat(4, 78px);
+  border: 2px solid #1B2A4A;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.cell {
+  width: 78px; height: 78px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.8rem;
+  position: relative;
+}
+.cell.light { background: #F0D9B5; }
+.cell.dark  { background: #B58863; }
+.cell.reveal-check  { background: rgba(220,50,50,0.40) !important; }
+.cell.reveal-threat { background: rgba(220,160,20,0.45) !important; }
+.cell.reveal-king   { background: rgba(200,30,30,0.55) !important; }
+
+.files-row {
+  display: grid;
+  grid-template-columns: repeat(4, 78px);
+}
+.files-row span {
+  text-align: center;
+  font-size: 0.72rem;
+  color: #888;
+  font-weight: 600;
+}
+
+/* ANSWER BUTTONS */
+.answer-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.4rem;
+}
+.answer-row { display: flex; gap: 16px; }
+.ans-btn {
+  padding: 12px 40px;
+  border-radius: 30px;
+  border: 2px solid;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-width: 120px;
+  letter-spacing: 0.03em;
+}
+.ans-btn.yes {
+  background: #2E5F8A; color: white; border-color: #2E5F8A;
+}
+.ans-btn.yes:hover { background: #1B2A4A; border-color: #1B2A4A; }
+.ans-btn.no {
+  background: white; color: #2E5F8A; border-color: #2E5F8A;
+}
+.ans-btn.no:hover { background: #EDF2F7; }
+.ans-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* TIMER */
+.timer-display {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #2E5F8A;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.timer-label { font-size: 0.75rem; color: #888; text-align: center; }
+
+/* FEEDBACK */
+.feedback {
+  border-radius: 10px;
+  padding: 1.1rem 1.4rem;
+  margin-top: 1rem;
+  line-height: 1.5;
+  font-size: 0.92rem;
+  display: none;
+  text-align: center;
+}
+.feedback.correct { background: #EAF3DE; border-left: 4px solid #639922; }
+.feedback.wrong   { background: #FFEBEB; border-left: 4px solid #E24B4A; }
+.feedback strong { display: block; font-size: 1.1rem; margin-bottom: 4px; }
+
+/* NEXT */
+.next-btn {
+  display: none;
+  margin: 1.2rem auto 0;
+  padding: 10px 32px;
+  background: #2E5F8A;
+  color: white;
+  border: none;
+  border-radius: 24px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.next-btn:hover { background: #1B2A4A; }
+
+/* SCOREBOARD */
+.scoreboard {
+  display: none;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 2rem;
+  text-align: center;
+}
+.score-big { font-size: 3rem; font-weight: 700; color: #2E5F8A; margin: 0.5rem 0; }
+.score-sub { color: #4A5568; font-size: 0.95rem; margin-bottom: 1rem; }
+.restart-btn {
+  margin-top: 1.4rem;
+  padding: 10px 28px;
+  background: #1B2A4A;
+  color: white;
+  border: none;
+  border-radius: 24px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.restart-btn:hover { background: #2E5F8A; }
+
+footer {
+  text-align: center;
+  font-size: 0.76rem;
+  color: #A0AEC0;
+  padding: 1.5rem 1rem;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>&#9822; Schach &amp; Expertise – Check vs. Threat</h1>
+    <p>Erlebe das Experiment selbst!</p>
+  </div>
+</header>
+
+<div class="main" id="main">
+
+  <div class="progress-bar">
+    <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+    <div class="prog-label" id="progLabel">Aufgabe 1 von 8</div>
+  </div>
+
+  <div id="taskArea">
+    <div class="task-header">
+      <div class="task-q" id="taskQuestion">–</div>
+      <div>
+        <div class="badge" id="taskBadge">CHECK</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="board-area">
+        <div class="board" id="board"></div>
+        <div class="files-row">
+          <span>a</span><span>b</span><span>c</span><span>d</span>
+        </div>
+      </div>
+
+      <div class="answer-area">
+        <div class="timer-display" id="timerDisplay">0.00s</div>
+        <div class="timer-label">deine Zeit</div>
+        <div class="answer-row">
+          <button class="ans-btn yes" id="btnYes" onclick="answer(true)">JA ✓</button>
+          <button class="ans-btn no"  id="btnNo"  onclick="answer(false)">NEIN ✗</button>
+        </div>
+      </div>
+
+      <div class="feedback" id="feedback"></div>
+
+      <button class="next-btn" id="nextBtn" onclick="nextTrial()">Weiter &#8594;</button>
+    </div>
+  </div>
+
+  <div class="scoreboard" id="scoreboard">
+    <div style="font-size:1.3rem;font-weight:700;color:#1B2A4A;margin-bottom:0.3rem;">Geschafft!</div>
+    <div class="score-big" id="scoreNum">–</div>
+    <div class="score-sub" id="scoreSub">–</div>
+    <button class="restart-btn" onclick="restart()">&#8635; Nochmal spielen</button>
+  </div>
+
+</div>
+
+<footer>Seminar Allgemeine Psychologie · B.Sc. Psychologie, 2. Semester</footer>
+
+<script>
+const PIECES = { wR:'♜', wQ:'♛', wB:'♝', wN:'♞', bK:'♚' };
+
+const TRIALS = [
+  {
+    mode:'check', label:'CHECK', question:'Steht der König jetzt im Schach?',
+    pieces:{ bK:[0,3], wR:[0,0] },
+    answer:true,
+    checkFields:[[0,1],[0,2],[0,3]], threatFields:[],
+  },
+  {
+    mode:'threat', label:'THREAT', question:'Kann der König in einem Zug bedroht werden?',
+    pieces:{ bK:[2,3], wR:[0,0] },
+    answer:true,
+    checkFields:[], threatFields:[[0,3],[1,3],[2,3],[2,0],[2,1],[2,2]],
+  },
+  {
+    mode:'check', label:'CHECK', question:'Steht der König jetzt im Schach?',
+    pieces:{ bK:[3,3], wQ:[0,0] },
+    answer:true,
+    checkFields:[[1,1],[2,2],[3,3]], threatFields:[],
+  },
+  {
+    mode:'check', label:'CHECK', question:'Steht der König jetzt im Schach?',
+    pieces:{ bK:[3,0], wB:[1,2] },
+    answer:false,
+    checkFields:[], threatFields:[],
+  },
+  {
+    mode:'threat', label:'THREAT', question:'Kann der König in einem Zug bedroht werden?',
+    pieces:{ bK:[3,0], wB:[0,3] },
+    answer:true,
+    checkFields:[], threatFields:[[1,2],[2,1],[3,0]],
+  },
+  {
+    mode:'threat', label:'THREAT', question:'Kann der König in einem Zug bedroht werden?',
+    pieces:{ bK:[2,0], wQ:[0,2] },
+    answer:true,
+    checkFields:[], threatFields:[[1,1],[2,0],[0,0],[1,0]],
+  },
+  {
+    mode:'check', label:'CHECK', question:'Steht der König jetzt im Schach?',
+    pieces:{ bK:[3,3], wR:[1,0] },
+    answer:false,
+    checkFields:[], threatFields:[],
+  },
+  {
+    mode:'threat', label:'THREAT', question:'Kann der König in einem Zug bedroht werden?',
+    pieces:{ bK:[3,3], wR:[1,0] },
+    answer:true,
+    checkFields:[], threatFields:[[3,0],[3,1],[3,2],[3,3],[0,0],[2,0],[1,1],[1,2],[1,3]],
+  },
+];
+
+let trialIdx = 0;
+let startTime = 0;
+let timerInterval = null;
+let results = [];
+let answered = false;
+
+function buildBoard(trial, revealed) {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  for (let r = 3; r >= 0; r--) {
+    for (let c = 0; c < 4; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell ' + ((r + c) % 2 !== 0 ? 'light' : 'dark');
+
+      if (revealed) {
+        const fields = trial.mode === 'check' ? trial.checkFields : trial.threatFields;
+        if (fields.some(f => f[0]===c && f[1]===r)) {
+          cell.classList.add(trial.mode === 'check' ? 'reveal-check' : 'reveal-threat');
+        }
+        if (trial.mode === 'check' && trial.answer) {
+          const kpos = trial.pieces.bK;
+          if (kpos[0]===c && kpos[1]===r) cell.classList.add('reveal-king');
+        }
+      }
+
+      for (const [pname, pos] of Object.entries(trial.pieces)) {
+        if (pos[0]===c && pos[1]===r) {
+          const span = document.createElement('span');
+          span.textContent = PIECES[pname] || '?';
+          cell.appendChild(span);
+        }
+      }
+      board.appendChild(cell);
+    }
+  }
+}
+
+function startTimer() {
+  startTime = performance.now();
+  timerInterval = setInterval(() => {
+    const elapsed = (performance.now() - startTime) / 1000;
+    document.getElementById('timerDisplay').textContent = elapsed.toFixed(2) + 's';
+  }, 50);
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  return (performance.now() - startTime);
+}
+
+function loadTrial() {
+  answered = false;
+  const trial = TRIALS[trialIdx];
+
+  document.getElementById('progFill').style.width = (trialIdx / TRIALS.length * 100) + '%';
+  document.getElementById('progLabel').textContent = `Aufgabe ${trialIdx+1} von ${TRIALS.length}`;
+  document.getElementById('taskQuestion').textContent = trial.question;
+  document.getElementById('taskBadge').textContent = trial.label;
+  document.getElementById('taskBadge').style.background = trial.mode === 'check' ? '#E24B4A' : '#C9A84C';
+  document.getElementById('taskBadge').style.color = trial.mode === 'check' ? 'white' : '#1B2A4A';
+  document.getElementById('timerDisplay').textContent = '0.00s';
+
+  document.getElementById('feedback').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
+
+  document.getElementById('btnYes').disabled = false;
+  document.getElementById('btnNo').disabled  = false;
+
+  buildBoard(trial, false);
+  startTimer();
+}
+
+function answer(userSaid) {
+  if (answered) return;
+  answered = true;
+  const ms = stopTimer();
+  const trial = TRIALS[trialIdx];
+  const correct = (userSaid === trial.answer);
+
+  document.getElementById('btnYes').disabled = true;
+  document.getElementById('btnNo').disabled  = true;
+
+  results.push({ mode: trial.mode, ms, correct });
+  buildBoard(trial, true);
+
+  const fb = document.getElementById('feedback');
+  fb.style.display = 'block';
+  if (correct) {
+    fb.className = 'feedback correct';
+    fb.innerHTML = `<strong>&#10004; Richtig!</strong>${(ms/1000).toFixed(2)} Sekunden`;
+  } else {
+    fb.className = 'feedback wrong';
+    fb.innerHTML = `<strong>&#10008; Nicht ganz!</strong>${(ms/1000).toFixed(2)} Sekunden`;
+  }
+
+  document.getElementById('nextBtn').style.display = 'block';
+}
+
+function nextTrial() {
+  trialIdx++;
+  if (trialIdx >= TRIALS.length) {
+    showScoreboard();
+  } else {
+    loadTrial();
+  }
+}
+
+function showScoreboard() {
+  document.getElementById('progFill').style.width = '100%';
+  document.getElementById('progLabel').textContent = 'Abgeschlossen!';
+  document.getElementById('taskArea').style.display = 'none';
+  const sb = document.getElementById('scoreboard');
+  sb.style.display = 'block';
+
+  const correct = results.filter(r => r.correct).length;
+  const total = results.length;
+  const avgMs = Math.round(results.reduce((s,r) => s + r.ms, 0) / total);
+
+  document.getElementById('scoreNum').textContent = `${correct} / ${total}`;
+  document.getElementById('scoreSub').textContent = `Ø ${(avgMs/1000).toFixed(2)} s Reaktionszeit`;
+}
+
+function restart() {
+  trialIdx = 0;
+  results = [];
+  answered = false;
+  document.getElementById('taskArea').style.display = 'block';
+  document.getElementById('scoreboard').style.display = 'none';
+  loadTrial();
+}
+
+loadTrial();
+</script>
+</body>
+</html>
